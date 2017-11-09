@@ -1,0 +1,9 @@
+version: '3'
+services:
+    deepstream:
+        image: deepstreamio/deepstream.io
+        ports:
+            - "6020:6020"
+            - "6021:6021"
+        volumes:
+            - ./conf:/etc/deepstream
