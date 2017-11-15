@@ -33,10 +33,6 @@ class DeepstreamFactory(WebSocketClientFactory):
     # Factories store any stateful information a protocol might need.
     # This way, if reconnection occurs, that state information is still available to the new protocol.
     auth = (None, None)
-    protocol = None
-    def __init__(self, url, enableCompression=False, autoFragmentSize=1024):
-        # TODO: Any relevant init
-        return 
 
 
 # The following code should only be used for testing and developing this library.
@@ -45,15 +41,12 @@ if __name__ == '__main__':
     from twisted.python import log
     from twisted.internet import reactor
     from twisted.internet.protocol import Factory
-    from twisted.internet.endpoints import clientFromString
+    from autobahn.twisted.websocket import WebSocketClientFactory,WebSocketClientProtocol
 
     log.startLogging(sys.stdout)
-    wrappedFactory = Factory.forProtocol(DeepstreamProtocol) 
-    #factory = DeepstreamFactory()
+    factory = DeepstreamFactory(u"ws://localhost:6020/deepstream")
     # TODO: Set auth information for factory
-    #factory.protocol = DeepstreamProtocol
-    endpoint = clientFromString(reactor, "autobahn:tcp\:172.19.0.2\:6020:url=ws\://172.19.0.2/deepstream\:6020")
-    endpoint.connect(wrappedFactory)
-    #reactor.connectTCP("127.0.0.1", 8020, factory)
+    factory.protocol = DeepstreamProtocol
+    reactor.connectTCP("127.0.0.1", 6020, factory)
     reactor.run()
 

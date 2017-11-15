@@ -1,0 +1,10 @@
+Useful links I found
+
+https://stackoverflow.com/questions/31888037/how-do-twisted-python-factory-and-protocol-interfaces-work
+https://stackoverflow.com/questions/6088280/how-to-send-data-with-twisted-protocol-via-factory
+
+Getting familiar with the philosophy of Twisted Matrix (for this context)
+http://twistedmatrix.com/documents/current/core/howto/tutorial/client.html
+http://twistedmatrix.com/documents/current/core/howto/clients.html
+http://twistedmatrix.com/documents/current/core/howto/endpoints.html
+http://twistedmatrix.com/documents/current/core/howto/components.html
