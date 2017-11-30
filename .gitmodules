@@ -1,0 +1,3 @@
+[submodule "src/gherkin"]
+	path = src/gherkin
+	url = git@github.com:deepstreamIO/deepstream.io-client-specs.git
