@@ -1,40 +1,16 @@
-# pydeepstream
-Python driver for Deepstream.io on Twisted with Autobahn. This project provides an API interface to communicate with a Deepstream server for Twisted applications. 
+# WARNING
 
-## Getting Started
-( TODO - how does one get a copy of this project up and running locally for dev and test? )
+This is a WIP, being adapted from the forked source (a Tornado adapter) to work with Twisted. It DOES NOT FULLY WORK right now.
 
-### Prerequisites
-This project requires Twisted and Autobahn. It does not currently offer automatic dependency resolution on its own.
+Current state: `deepstreampy_twisted/protocol.py` initiates a connection and authenticates.
 
-```
-pip install twisted autobahn
-```
+THIS BRANCH MAY BE FORCE-PUSHED AT ANY TIME.
 
-### Installing
+I intend to clean up the commit history and the structure of this repository.
 
-( TODO - A step by step series of examples that tell the user how to get an environment running to develop with it. )
+# deepstreampy
+A Python client for deepstream.io for Twisted.
 
-
-## Running the tests
-
-( TODO - How to run Gherkin tests )
-
-### Test coverage
-
-( TODO - what's covered by the testing suite? )
-
-## Deployment
-
-( TODO - How do we deploy it? )
-
-## Built With
-
-* [Twisted Matrix](https://twistedmatrix.com/trac/) - network engine
-* [Autobahn](https://github.com/crossbario/autobahn-python) - provides WebSocket protocol for Twisted
-
-## Authors
-* **Will Crawford** - *Initial work* - [Sapid](https://github.com/sapid)
-
-## License
-This project is licensed under GPLv3 - see the [LICENSE](LICENSE) file for details.
+# Readme TODO: Build status, coverage status
+* Travis-ci?
+* Coveralls.io?
