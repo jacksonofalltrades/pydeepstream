@@ -24,7 +24,6 @@ class DeepstreamProtocol(WebSocketClientProtocol):
         # TODO: Verify we're speaking Deepstream, a subprotocol of WebSocket, essentially
         #       Update: may not be possible; there doesn't seem to be an "info" call or anything
         print("Connected to Server: {}".format(response.peer))
-        # TODO: Register handlers
         if self.factory._state != constants.connection_state.AWAITING_CONNECTION:
             self.factory._set_state(constants.connection_state.AWAITING_CONNECTION)
         self.debug("onConnect response: {}".format(response))
@@ -34,10 +33,10 @@ class DeepstreamProtocol(WebSocketClientProtocol):
         #         How can we check if auth is open? Attempt to login anyway and catch exceptions?
         #         Per https://deepstream.io/info/protocol/all-messages/ it may not be possible to query for state.
         self.debug("Connection opened.")
-        # TODO: Register handlers
         self._heartbeat_last = time.time()
         l = twisted_task.LoopingCall(self._heartbeat)
         self.factory._heartbeat_looper = l
+        self.factory._protocol_instance = self
         # TODO: Reset retry timer in reconnectfactory.
     def _catch_error(self, topic, event, msg=None):
         self.debugExec()
@@ -84,7 +83,7 @@ class DeepstreamProtocol(WebSocketClientProtocol):
             elif msg['topic'] == constants.topic.AUTH:
                 self._auth_response_handler(msg)
             else:
-                raise NotImplementedError(msg) # TODO: Send to client object?
+                self.factory.client._on_message(parsed_messages[0])
 
 
     def _heartbeat(self):
@@ -203,6 +202,7 @@ class DeepstreamProtocol(WebSocketClientProtocol):
             self.factory._heartbeat_looper.stop()
         self.factory._heartbeat_looper = None
         self.factory._heartbeat_last = None
+        self.factory._protocol_instance = None
 
     def sendMessage(self, payload):
         self.debugExec()

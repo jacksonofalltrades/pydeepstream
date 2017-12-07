@@ -1,3 +1,5 @@
 pyee==1.0.2
 Twisted>=17.9.0
 autobahn>=17.10.1
+tornado>=4.5.2
+singledispatch>=3.4.0.3
