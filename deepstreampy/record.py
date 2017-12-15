@@ -1,15 +1,15 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
-from deepstreampy_twisted.constants import topic as topic_constants
-from deepstreampy_twisted.constants import actions as action_constants
-from deepstreampy_twisted.constants import event as event_constants
-from deepstreampy_twisted.constants import connection_state
-from deepstreampy_twisted.message import message_parser, message_builder
-from deepstreampy_twisted.utils import ResubscribeNotifier, SingleNotifier, Listener
-from deepstreampy_twisted.utils import str_types
-from deepstreampy_twisted.constants import merge_strategies
-from deepstreampy_twisted import jsonpath
+from deepstreampy.constants import topic as topic_constants
+from deepstreampy.constants import actions as action_constants
+from deepstreampy.constants import event as event_constants
+from deepstreampy.constants import connection_state
+from deepstreampy.message import message_parser, message_builder
+from deepstreampy.utils import ResubscribeNotifier, SingleNotifier, Listener
+from deepstreampy.utils import str_types
+from deepstreampy.constants import merge_strategies
+from deepstreampy import jsonpath
 
 from pyee import EventEmitter
 from tornado import gen, concurrent

@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
-from deepstreampy_twisted.constants import types
-from deepstreampy_twisted.constants import message as message_constants
-#from deepstreampy_twisted.utils import Undefined
+from deepstreampy.constants import types
+from deepstreampy.constants import message as message_constants
+#from deepstreampy.utils import Undefined
 import sys
 import json
 

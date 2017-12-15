@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 
 import re
 from copy import deepcopy
-from deepstreampy_twisted.utils import Undefined, num_types
+from deepstreampy.utils import Undefined, num_types
 
 SPLIT_REG_EXP = r"[\.\[\]]"
 

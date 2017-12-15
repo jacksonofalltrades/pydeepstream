@@ -3,12 +3,12 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
-from deepstreampy_twisted.constants import topic as topic_constants
-from deepstreampy_twisted.constants import actions
-from deepstreampy_twisted.constants import event as event_constants
-from deepstreampy_twisted.message import message_builder
-from deepstreampy_twisted.message import message_parser
-from deepstreampy_twisted import utils
+from deepstreampy.constants import topic as topic_constants
+from deepstreampy.constants import actions
+from deepstreampy.constants import event as event_constants
+from deepstreampy.message import message_builder
+from deepstreampy.message import message_parser
+from deepstreampy import utils
 
 from tornado import concurrent
 
@@ -25,7 +25,7 @@ class RPCResponse(object):
     def __init__(self, connection, name, correlation_id):
         """
         Args:
-            connection (deepstreampy_twisted.client._Connection): The current connection
+            connection (deepstreampy.client._Connection): The current connection
             name (str): The name of the RPC
             correlation_id (str): Correlation ID of the RPC
         """

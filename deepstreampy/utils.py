@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
-from deepstreampy_twisted.constants import actions as action_constants
-from deepstreampy_twisted.constants import event as event_constants
-from deepstreampy_twisted.constants import connection_state
+from deepstreampy.constants import actions as action_constants
+from deepstreampy.constants import event as event_constants
+from deepstreampy.constants import connection_state
 
 from pyee import EventEmitter
 from tornado import concurrent

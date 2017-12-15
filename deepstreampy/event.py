@@ -3,14 +3,14 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
-from deepstreampy_twisted.constants import actions
-from deepstreampy_twisted.constants import topic as topic_constants
-from deepstreampy_twisted.constants import event as event_constants
-from deepstreampy_twisted.message import message_parser
-from deepstreampy_twisted.message import message_builder
-from deepstreampy_twisted.utils import Listener
-from deepstreampy_twisted.utils import AckTimeoutRegistry
-from deepstreampy_twisted.utils import ResubscribeNotifier
+from deepstreampy.constants import actions
+from deepstreampy.constants import topic as topic_constants
+from deepstreampy.constants import event as event_constants
+from deepstreampy.message import message_parser
+from deepstreampy.message import message_builder
+from deepstreampy.utils import Listener
+from deepstreampy.utils import AckTimeoutRegistry
+from deepstreampy.utils import ResubscribeNotifier
 
 from tornado import concurrent
 

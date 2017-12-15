@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
-from deepstreampy_twisted.utils import str_types
-from deepstreampy_twisted import constants
-from deepstreampy_twisted.message import message_builder, message_parser
+from deepstreampy.utils import str_types
+from deepstreampy import constants
+from deepstreampy.message import message_builder, message_parser
 
 from tornado import ioloop, concurrent, websocket, gen
 

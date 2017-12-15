@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
-from deepstreampy_twisted.constants import message as message_constants
-from deepstreampy_twisted.constants import topic, event, actions, types
+from deepstreampy.constants import message as message_constants
+from deepstreampy.constants import topic, event, actions, types
 
 import json
 import sys
