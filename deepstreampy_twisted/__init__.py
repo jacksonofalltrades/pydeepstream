@@ -12,6 +12,9 @@ from deepstreampy import constants, message
 import deepstreampy_twisted
 from deepstreampy_twisted import protocol
 from deepstreampy_twisted.protocol import DeepstreamFactory, DeepstreamProtocol
+from twisted.plugin import pluginPackagePaths, getPlugins, IPlugin
+__path__.extend(pluginPackagePaths(__name__))
+list(getPlugins(IPlugin))
 
 
 
