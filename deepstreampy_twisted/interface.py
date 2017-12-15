@@ -1,26 +1,20 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
-# TODO: Override tornado's gen and concurrent
-
-from tornado.platform.twisted import TwistedIOLoop
-from twisted.internet import reactor
-TwistedIOLoop().install()
-
-from deepstreampy_twisted import constants
-from deepstreampy_twisted.protocol import DeepstreamFactory
-from deepstreampy_twisted.client import Client
-from deepstreampy_twisted.event import EventHandler
-from deepstreampy_twisted.message import connection, message_parser, message_builder
 from tornado import ioloop
 
+from deepstreampy import constants
+from deepstreampy_twisted.protocol import WSDeepstreamFactory
+from deepstreampy_twisted import log
 
-def connect(host, port=6020, url=None, **kwargs):
-    if not url:
-        url = "ws://%s:%s/deepstream" % (host, port)
-    factory = DeepstreamFactory(url, debug=True)
-    # TODO: Set auth information for factory
-    reactor.connectTCP(host, port, factory)
+from deepstreampy.client import Client
+from deepstreampy.event import EventHandler
+from deepstreampy.message import connection, message_parser, message_builder
+from twisted.application.internet import ClientService
+from twisted.internet.endpoints import clientFromString
+
+from urlparse import urlparse
+
 
 class ConnectionInterface(connection.Connection):
     def __init__(self, client, url, **options):
@@ -37,29 +31,53 @@ class ConnectionInterface(connection.Connection):
         self.factory._state = s
     @property
     def protocol(self):
-        return self._client._factory._protocol_instance
+        return self._service.whenConnected()
+    @protocol.setter
+    def _set_protocol(self, p):
+        raise NotImplementedError("Setting the protocol is not implemented via this method.")
     @property
     def factory(self):
         return self._client._factory
     def send(self, raw_message):
-        return self.protocol.send(raw_message)
-    @staticmethod
-    def _stripped_send(protocol, raw_message):
-        return protocol.send(raw_message)
-    # def send_message(self, topic, action, data):
-    #     message = message_builder.get_message(topic, action, data)
-    #     return self.send(message)
+        return self.factory.send(raw_message)
+    @property
+    def _url(self):
+        return self._client._factory.url
 
 
 class DeepstreamClient(Client):
-    def __init__(self, host, port=6020, url=None, authParams=None, **options):
-        # Optional params: port, url, authParams, heartbeat_interval
-        if not host:
-            raise ValueError("Must specify a hostname or IP for deepstream server.")
-        if not url:
-            url = "ws://%s:%s/deepstream" % (host, port)
-        self._factory = DeepstreamFactory(url, self, debug=options.pop('debug', False), **options)
-        reactor.connectTCP(host, port, self._factory)
+    def __init__(self, url=None, conn_string=None, authParams=None, reactor=None, **options):
+        # Optional params for...
+        #   Client: conn_string, authParams, reactor
+        #   protocol: heartbeat_interval TODO
+        #   rpc: TODO
+        #   record: TODO
+        #   presence: TODO
+        if not url or url is None:
+            raise ValueError("url is None; you must specify a  URL for the deepstream server, e.g. ws://localhost:6020/deepstream")
+        parse_result = urlparse(url)
+        if not authParams or authParams is None:
+            authParams = {}
+            if parse_result.username and parse_result.password:
+                authParams['username'] = parse_result.username
+                authParams['password'] = parse_result.password
+        if not conn_string or conn_string is None:
+            if parse_result.scheme == 'ws':
+                if parse_result.hostname:
+                    conn_string = 'tcp:%s' % parse_result.hostname
+                if parse_result.port:
+                    conn_string += ':%s' % parse_result.port
+                else:
+                    conn_string += ':6020'
+        if not conn_string or conn_string is None:
+            raise ValueError("Could not parse conn string from URL; you must specify a Twisted endpoint descriptor for the server, e.g. tcp:127.0.0.1:6020")
+        if not reactor or reactor is None:
+            from twisted.internet import reactor
+        self.reactor = reactor
+        self._factory = WSDeepstreamFactory(url, self, debug=options.pop('debug', False), reactor=reactor, **options)
+        self._endpoint = clientFromString(reactor, conn_string)
+        self._service = ClientService(self._endpoint, self._factory) # Handles reconnection for us
+
         super(Client, self).__init__()
         self._connection = ConnectionInterface(self, url)
         # self._presence = PresenceHandler(self._connection, self, **options)
@@ -83,19 +101,30 @@ class DeepstreamClient(Client):
         # self._message_callbacks[constants.topic.ERROR] = self._on_error
     def login(self, auth_params):
         # TODO: turn in to Deferred to return after authenticated properly?
-        raise NotImplementedError("")
+        raise NotImplementedError("This client implementation authenticates automatically after a successful connection. Specify auth_params before starting the connection.")
     def connect(self, callback=None):
-        # TODO: Pass callback to onConnect
-        reactor.run()
+        # TODO: Pass callback to auth handler
+        self._service.startService()
+    def disconnect(self):
+        # TODO: Say goodbye, clear message queue
+        self._service.stopService()
+    def whenConnected(self):
+        # Offer a deferred that will fire when we connect.
+        pass
+
 
 
 
 if __name__ == '__main__':
     def the_callback(message=None):
         print("Received event :" + str(message))
-    client = DeepstreamClient('localhost', debug=True)
+    from twisted.internet import reactor
+
+    client = DeepstreamClient(url='ws://localhost:6020/deepstream', debug='verbose',)
+    reactor.callLater(0, client.connect)
     reactor.callLater(1, client.event.emit, 'chat', 'hello world')
     reactor.callLater(1, client.event.subscribe, 'chat', the_callback)
-    # NOTE: To see
+    # reactor.callLater(2, client.disconnect)
     client.connect()
+    reactor.run()
 

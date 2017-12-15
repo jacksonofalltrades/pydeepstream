@@ -1,43 +1,37 @@
 #!/usr/bin/env python
-from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory
-from twisted.internet import task as twisted_task
-from twisted.internet.protocol import ReconnectingClientFactory
-from deepstreampy_twisted import constants
+from twisted.internet import defer, task as twisted_task
+from twisted.internet.protocol import Protocol, ClientFactory
+from deepstreampy import constants
 import time
-from deepstreampy_twisted.message import message_parser, message_builder
-from twisted.python import log
+from deepstreampy.message import message_parser, message_builder
+from deepstreampy_twisted import log
+from collections import deque
 import txaio
-import inspect # TODO: For debug only
+from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory
+
 
 class ErrorCatcher(object):
     def __init__(self, func):
         self._on_error = func
 
-class DeepstreamProtocol(WebSocketClientProtocol):
-    # Protocols are used once per session; they are not re-used. 
+class DeepstreamProtocol(Protocol):
+    # Protocols are used once per session; they are not re-used.
     # If reconnection occurs, a new protocol is created by the factory in use.
-    def onConnect(self, response):
+    def connectionMade(self):
         self.debugExec()
-        # Options:
-        #  Check or set cookies or other HTTP headers
-        #  Verify IP address
-        # TODO: Verify we're speaking Deepstream, a subprotocol of WebSocket, essentially
-        #       Update: may not be possible; there doesn't seem to be an "info" call or anything
-        print("Connected to Server: {}".format(response.peer))
         if self.factory._state != constants.connection_state.AWAITING_CONNECTION:
             self.factory._set_state(constants.connection_state.AWAITING_CONNECTION)
-        self.debug("onConnect response: {}".format(response))
+    def onConnect(self, response):
+        self.debugExec()
+        log.info("Connected to Server: {}".format(response.peer))
+        self.debug("Whole response received: %s" % response)
     def onOpen(self):
         self.debugExec()
-        # TODO: If auth is open, we don't need auth information to login. 
-        #         How can we check if auth is open? Attempt to login anyway and catch exceptions?
-        #         Per https://deepstream.io/info/protocol/all-messages/ it may not be possible to query for state.
         self.debug("Connection opened.")
         self._heartbeat_last = time.time()
         l = twisted_task.LoopingCall(self._heartbeat)
         self.factory._heartbeat_looper = l
         self.factory._protocol_instance = self
-        # TODO: Reset retry timer in reconnectfactory.
     def _catch_error(self, topic, event, msg=None):
         self.debugExec()
         # Adapted from https://github.com/YavorPaunov/deepstreampy under MIT License
@@ -49,22 +43,16 @@ class DeepstreamProtocol(WebSocketClientProtocol):
                                                                               constants.topic.ERROR,
                                                                               error_msg))
         # TODO: If we end up having listeners for errors, notify them here.
+        #         Use pyee?
         raw_error_message = event + ': ' + msg
         if topic:
             raw_error_message += ' (' + topic + ')'
         raise ValueError(raw_error_message)
-    def send(self, message):
-        self.debugExec()
-        # TODO: Buffer messages
-        if isinstance(message, unicode):
-            #message = message.encode("utf-8")
-            message = message.encode()
-        self.sendMessage(message)
 
     def onMessage(self, payload, isBinary):
         self.debugExec()
         if isBinary:
-            raise NotImplementedError
+            raise NotImplementedError("Received binary message; expected string")
         self.debug("Received: " + payload)
         # TODO: Do we need to catch decoding errors?
         #text = payload.decode('UTF-8', errors='strict') # Unnecessary?
@@ -85,15 +73,14 @@ class DeepstreamProtocol(WebSocketClientProtocol):
             else:
                 self.factory.client._on_message(parsed_messages[0])
 
-
+    # def dataReceived(self, data):
+    #     self.log.debug(data)
     def _heartbeat(self):
         self.debugExec()
         elapsed = time.time() - self.factory._heartbeat_last
         if elapsed >= self.factory._heartbeat_tolerance:
-            self.debug("Heartbeat missed. Closing connection.")
+            self.log.error("Heartbeat missed. Closing connection.")
             self.transport.loseConnection()
-            # TODO: Inform logger
-        # TODO: Check if we've missed any.
     def authenticate(self):
         # Dead code: we automatically authenticate when we receive "C|A+"
         #            instead of making our client call authentication manually
@@ -193,53 +180,61 @@ class DeepstreamProtocol(WebSocketClientProtocol):
             self.factory._set_state(constants.connection_state.CHALLENGING)
             self.send(challenge_response)
     def onClose(self, wasClean, code, reason):
-        print(inspect.stack()[0][3] + " from " + inspect.stack()[1][3])
-        # TODO: Anything to do?
+        # TODO: Anything else to do?
         #       Should state be set to ERROR if wasClean is false?
         self.factory._set_state(constants.connection_state.CLOSED)
-        print("WebSocket connection closed: {}".format(reason))
+        self.log.info("WebSocket connection closed: {}".format(reason))
         if self.factory._heartbeat_looper and self.factory._heartbeat_looper.running:
             self.factory._heartbeat_looper.stop()
         self.factory._heartbeat_looper = None
         self.factory._heartbeat_last = None
         self.factory._protocol_instance = None
+    def send(self, message):
+        self.debugExec()
+        if isinstance(message, unicode):
+            #message = message.encode("utf-8")
+            message = message.encode()
+        self.debug("Sending: %s" % message)
+        self.sendMessage(message)
 
     def sendMessage(self, payload):
         self.debugExec()
-        super(DeepstreamProtocol, self).sendMessage(payload)
-        self.debug("Sent " + str(payload))
+        return self.transport.write(payload)
+        # r = yield defer.maybeDeferred(self.transport.write(payload))
+        # defer.returnValue(r)
+        # super(DeepstreamProtocol, self).sendMessage(payload)
     #def sendData(self, data, **kwargs):
     #    self.debugExec()
     #    # TODO: Batch messages
     #    super(DeepstreamProtocol, self).sendData(data, **kwargs)
     #    self.debug("Sent " + str(data))
     def debug(self, message):
-        self.debugExec()
         if not self.factory.debug:
             return
         if isinstance(message, str):
             message = unicode(message, 'utf-8')
-        self.log.debug(message.replace(chr(31), '|').replace(chr(30), '+'))
+        log.debug(message.replace(chr(31), '|').replace(chr(30), '+').replace('{', '{{').replace('}', '}}'))
     def debugExec(self):
         if not self.factory.debug:
             return
-        self.log.debug(inspect.stack()[1][3])
+        if self.factory.debug == 'verbose':
+            log.debug(inspect.stack()[1][3])
 
-class DeepstreamFactory(WebSocketClientFactory, ReconnectingClientFactory):
+class WSDeepstreamProtocol(DeepstreamProtocol, WebSocketClientProtocol):
+    def connectionMade(self):
+        WebSocketClientProtocol.connectionMade(self)
+        DeepstreamProtocol.connectionMade(self)
+    def sendMessage(self, payload):
+        self.debugExec()
+        return WebSocketClientProtocol.sendMessage(self, payload)
+    #     # r = yield defer.maybeDeferred(WebSocketClientProtocol.sendMessage(self, payload))
+    #     # defer.returnValue(r)
+
+class DeepstreamFactory(ClientFactory):
     # Factories store any stateful information a protocol might need.
     # This way, if reconnection occurs, that state information is still available to the new protocol.
     # In the Twisted paradigm, the factory is initialized then handed off to the reactor which initiates the connection.
     # TODO note: Important for message queue: self.(connection?).
-    handlers_needed = [
-                       #constants.topic.CONNECTION,
-                       #constants.topic.AUTH,
-                       constants.topic.EVENT,
-                       constants.topic.PRIVATE,
-                       constants.topic.RPC,
-                       constants.topic.ERROR,
-                       constants.topic.PRESENCE,
-                       constants.topic.RECORD,
-                       ]
     protocol = DeepstreamProtocol
     def __init__(self, url, client=None, *args, **kwargs):
         # url: (str) the URL to connect to
@@ -248,48 +243,80 @@ class DeepstreamFactory(WebSocketClientFactory, ReconnectingClientFactory):
         # auth_params: (dict) # TODO: Document structure expected
         # authCallback (func) # Callback triggered by successful authentication
         self.url = url
-        if client:
-            self.client = client
+        self.client = client
         self._state = constants.connection_state.CLOSED
         kwargs['url'] = url
         self.debug = kwargs.pop('debug', False)
         if self.debug:
+            global inspect
+            import inspect
             txaio.start_logging(level='debug')
+            print('Debug enabled.')
+
         self._heartbeat_interval = kwargs.pop('heartbeat_interval', 100)
         self._heartbeat_tolerance = self._heartbeat_interval * 2
         self._heartbeat_looper = None
         self._heartbeat_last = None
         self._message_buffer = ''
+        self._queued_messages = deque()
         self.authParams = kwargs.pop('authParams', None)
         self.authToken = None
-        #self.authCallback = kwargs.pop('authCallback', None)
-        self._auth_future = None # TODO: Convert to Deferred
-        super(DeepstreamFactory, self).__init__(*args, **kwargs)
+        self._auth_deferred = defer.Deferred()
+        self.authCallback = kwargs.pop('authCallback', None)
+        if self.authCallback:
+            if callable(self.authCallback):
+                self._auth_deferred.addCallback(self.authCallback)
+            else:
+                raise ValueError("authCallback must be a callable")
     def _set_state(self, state):
         # This state keeps track of the connection with Deepstream per the
         # Deepstream spec. This state is distinct from the state
         # handled by ReconnectingClientFactory.
+        # TODO: Emit state change to client
         self._state = state
+        if self.client:
+            self.client.emit(constants.event.CONNECTION_STATE_CHANGED, state)
         print "State set to " + str(state)
     def setAuth(self, authParams):
-        # TODO: Write docstring
+        # This is a dict containing authentication parameters to send to the Deepstream server.
+        # TODO: Write better docstring
         self.authParams = authParams
     def startedConnecting(self, connector):
         self._set_state(constants.connection_state.AWAITING_CONNECTION)
-    # TODO: def clientConnectionFailed and def clientConnectionLost are inherited from ReconnectingClientFactory.
-    #       Can we add _set_state updates to these?
-    #       Should be able to just call retry with super, also.
-    #       TODO: Retry timer doesn't reset on connect.
+    def send(self, raw_message):
+        if self._state == constants.connection_state.OPEN and self._protocol_instance:
+            return self._protocol_instance.send(raw_message)
+        else:
+            deferred = defer.Deferred()
+            self._queued_messages.append((raw_message, deferred))
+            return deferred
+    def startFactory(self):
+        print("Starting DS factory")
+    # def buildProtocol(self, addr):
+    #     super(DeepstreamFactory, self).buildProtocol(addr)
+
+class WSDeepstreamFactory(DeepstreamFactory, WebSocketClientFactory):
+    protocol = WSDeepstreamProtocol
+    def __init__(self, url, *args, **kwargs):
+        DeepstreamFactory.__init__(self, url, *args, **kwargs)
+        WebSocketClientFactory.__init__(self,
+            url=url,
+            origin=kwargs.pop('origin', None),
+            protocols=kwargs.pop('protocols', None),
+            useragent=kwargs.pop('useragent', None),
+            headers=kwargs.pop('headers', None),
+            proxy=kwargs.pop('proxy', None),
+        )
 
 
 # The following code should only be used for testing and developing this library.
+# See interface.py for an example on how to use this in production.
 if __name__ == '__main__':
     from twisted.internet import reactor
-    from autobahn.twisted.websocket import WebSocketClientFactory,WebSocketClientProtocol
+    from twisted.internet.endpoints import clientFromString
 
-    factory = DeepstreamFactory("ws://localhost:6020/deepstream", debug=True)
-    # TODO: Set auth information for factory
-    factory.protocol = DeepstreamProtocol
-    reactor.connectTCP("127.0.0.1", 6020, factory)
+    factory = WSDeepstreamFactory("ws://localhost:6020/deepstream", debug='verbose')
+    factory.protocol = WSDeepstreamProtocol
+    endpoint = clientFromString(reactor, "tcp:localhost:6020")
+    endpoint.connect(factory)
     reactor.run()
-
