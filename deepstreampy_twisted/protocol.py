@@ -48,7 +48,6 @@ class DeepstreamProtocol(Protocol):
         if topic:
             raw_error_message += ' (' + topic + ')'
         raise ValueError(raw_error_message)
-
     def onMessage(self, payload, isBinary):
         self.debugExec()
         if isBinary:
@@ -67,9 +66,9 @@ class DeepstreamProtocol(Protocol):
             if msg is None:
                 continue
             elif msg['topic'] == constants.topic.CONNECTION:
-                self._connection_response_handler(msg)
+                self._handle_connection_response(msg)
             elif msg['topic'] == constants.topic.AUTH:
-                self._auth_response_handler(msg)
+                self._handle_auth_response(msg)
             else:
                 self.factory.client._on_message(parsed_messages[0])
 
@@ -81,37 +80,6 @@ class DeepstreamProtocol(Protocol):
         if elapsed >= self.factory._heartbeat_tolerance:
             self.log.error("Heartbeat missed. Closing connection.")
             self.transport.loseConnection()
-    def authenticate(self):
-        # Dead code: we automatically authenticate when we receive "C|A+"
-        #            instead of making our client call authentication manually
-        self.debugExec()
-        self._auth_params = self.factory.authParams
-        #self._auth_future = concurrent.Future() # Change to deferred? Do we need this?
-
-        # if (self._too_many_auth_attempts or
-        #         self._challenge_denied or
-        #         self._connection_auth_timeout):
-        #     msg = "this client's connection was closed"
-        #     self._client._on_error(constants.topic.ERROR,
-        #                            constants.event.IS_CLOSED,
-        #                            msg)
-        #     self._auth_future.set_result(
-        #         {'success': False,
-        #          'error': constants.event.IS_CLOSED,
-        #          'message': msg})
-        #
-        # elif (self._deliberate_close and
-        #               self._state == constants.connection_state.CLOSED):
-        #     self.connect()
-        #     self._deliberate_close = False
-        #     self._client.once(constants.event.CONNECTION_STATE_CHANGED,
-        #                       lambda: self.authenticate(auth_params))
-
-        if self.factory._state == constants.connection_state.AWAITING_AUTHENTICATION:
-            self._send_auth_params()
-
-        return self._auth_future
-        self.factory._set_state(constants.connection_state.AUTHENTICATING)
     def _send_auth_params(self):
         self.debugExec()
         self.factory._set_state(constants.connection_state.AUTHENTICATING)
@@ -128,7 +96,7 @@ class DeepstreamProtocol(Protocol):
         self.debugExec()
         if data:
             return message_parser.convert_typed(data, ErrorCatcher(self._catch_error()))
-    def _auth_response_handler(self, message):
+    def _handle_auth_response(self, message):
         message_data = message['data']
         message_action = message['action']
         data_size = len(message_data)
@@ -192,7 +160,6 @@ class DeepstreamProtocol(Protocol):
     def send(self, message):
         self.debugExec()
         if isinstance(message, unicode):
-            #message = message.encode("utf-8")
             message = message.encode()
         self.debug("Sending: %s" % message)
         self.sendMessage(message)
@@ -200,14 +167,7 @@ class DeepstreamProtocol(Protocol):
     def sendMessage(self, payload):
         self.debugExec()
         return self.transport.write(payload)
-        # r = yield defer.maybeDeferred(self.transport.write(payload))
-        # defer.returnValue(r)
-        # super(DeepstreamProtocol, self).sendMessage(payload)
-    #def sendData(self, data, **kwargs):
-    #    self.debugExec()
-    #    # TODO: Batch messages
-    #    super(DeepstreamProtocol, self).sendData(data, **kwargs)
-    #    self.debug("Sent " + str(data))
+
     def debug(self, message):
         if not self.factory.debug:
             return
@@ -227,14 +187,11 @@ class WSDeepstreamProtocol(DeepstreamProtocol, WebSocketClientProtocol):
     def sendMessage(self, payload):
         self.debugExec()
         return WebSocketClientProtocol.sendMessage(self, payload)
-    #     # r = yield defer.maybeDeferred(WebSocketClientProtocol.sendMessage(self, payload))
-    #     # defer.returnValue(r)
+
 
 class DeepstreamFactory(ClientFactory):
     # Factories store any stateful information a protocol might need.
     # This way, if reconnection occurs, that state information is still available to the new protocol.
-    # In the Twisted paradigm, the factory is initialized then handed off to the reactor which initiates the connection.
-    # TODO note: Important for message queue: self.(connection?).
     protocol = DeepstreamProtocol
     def __init__(self, url, client=None, *args, **kwargs):
         # url: (str) the URL to connect to
@@ -260,26 +217,61 @@ class DeepstreamFactory(ClientFactory):
         self._message_buffer = ''
         self._queued_messages = deque()
         self.authParams = kwargs.pop('authParams', None)
+        self._auto_auth = False
+        if self.authParams is not None:
+            self._auto_auth = True
         self.authToken = None
-        self._auth_deferred = defer.Deferred()
+        self._auth_deferred = None
+        self._connect_callback = None
         self.authCallback = kwargs.pop('authCallback', None)
         if self.authCallback:
             if callable(self.authCallback):
-                self._auth_deferred.addCallback(self.authCallback)
+
+                self.addAuthCallback(self.authCallback)
             else:
                 raise ValueError("authCallback must be a callable")
+
+        self._deliberate_close = False
+        self._too_many_auth_attempts = False
+        self._challenge_denied = False
+        self._connection_auth_timeout = False
+
+    def authenticate(self, auth_params):
+        self.authParams = auth_params
+        if not self._auth_deferred:
+            self._auth_deferred = defer.Deferred()
+        if (self._too_many_auth_attempts or
+                self._challenge_denied or
+                self._connection_auth_timeout):
+            msg = "This client's connection was closed."
+            self.client._on_error(constants.topic.ERROR,
+                                   constants.event.IS_CLOSED,
+                                   msg)
+            result = {  'success': False,
+                        'error': constants.event.IS_CLOSED,
+                        'message': msg
+                     }
+        elif (self._deliberate_close and
+                      self._state == constants.connection_state.CLOSED):
+            self._deliberate_close = False
+            if not self.client._service.running:
+                self.client.connect(callback=lambda: self.authenticate(auth_params))
+
+        if self._state == constants.connection_state.AWAITING_AUTHENTICATION:
+            return self._protocol_instance._send_auth_params()
+        if result:
+            return self._auth_deferred.callback(result)
+        return self._auth_deferred
     def _set_state(self, state):
         # This state keeps track of the connection with Deepstream per the
         # Deepstream spec. This state is distinct from the state
         # handled by ReconnectingClientFactory.
-        # TODO: Emit state change to client
         self._state = state
         if self.client:
             self.client.emit(constants.event.CONNECTION_STATE_CHANGED, state)
         print "State set to " + str(state)
     def setAuth(self, authParams):
         # This is a dict containing authentication parameters to send to the Deepstream server.
-        # TODO: Write better docstring
         self.authParams = authParams
     def startedConnecting(self, connector):
         self._set_state(constants.connection_state.AWAITING_CONNECTION)
