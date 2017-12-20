@@ -9,7 +9,7 @@ from deepstreampy.event import EventHandler
 from deepstreampy.rpc import RPCHandler
 from deepstreampy.presence import PresenceHandler
 
-from deepstreampy_twisted.protocol import WSDeepstreamFactory
+from deepstreampy_twisted.protocol import WSDeepstreamFactory, WSDeepstreamProtocol
 from deepstreampy_twisted import log
 
 from pyee import EventEmitter
@@ -37,12 +37,18 @@ class ConnectionInterface(connection.Connection):
     @_state.setter
     def __set_state(self, s):
         self.factory._state = s
+
     @property
+    @defer.inlineCallbacks
     def protocol(self):
-        return self._service.whenConnected()
+        proto_d = yield self._client._service.whenConnected()
+        if isinstance(proto_d, WSDeepstreamProtocol):
+            defer.returnValue(proto_d)
+        else:
+            raise Exception("Failed to retrieve protocol")
     @protocol.setter
     def _set_protocol(self, p):
-        raise NotImplementedError("Setting the protocol is not implemented via this method.")
+        raise NotImplementedError("Setting the protocol is not implemented via this attribute.")
     @property
     def factory(self):
         return self._client._factory
@@ -60,7 +66,7 @@ class ConnectionInterface(connection.Connection):
     def connect(self, callback):
         return self._client.connect(callback)
     def authenticate(self, auth_params):
-        self.protocol.authenticate(auth_params)
+        self.factory.authenticate(auth_params)
     def close(self):
         self._client.disconnect()
 
@@ -117,11 +123,8 @@ class DeepstreamClient(Client):
         self._message_callbacks[
             constants.topic.ERROR] = self._on_error
 
-
     def login(self, auth_params):
-        d = defer.Deferred()
-        # TODO: turn in to Deferred to return after authenticated properly?
-        raise NotImplementedError("This client implementation authenticates automatically after a successful connection. Specify auth_params before starting the connection.")
+        return self._connection.authenticate(auth_params)
     def connect(self, callback=None):
         if callback:
             self._factory._connect_callback = callback
@@ -135,10 +138,11 @@ class DeepstreamClient(Client):
         self._factory._deliberate_close = True
         self._service.stopService()
     def whenAuthenticated(self, callback, *args):
-        d = defer.Deferred()
-        d.addCallback(callback, *args)
-        # Offer a deferred that will fire when we connect.
-        pass
+        if self._factory._state == constants.connection_state.OPEN:
+            callback(*args)
+        else:
+            self.once(constants.event.CONNECTION_STATE_CHANGED,
+                              lambda x: DeepstreamClient.whenAuthenticated(self, callback, *args))
 
 
 
@@ -149,8 +153,8 @@ if __name__ == '__main__':
     from twisted.internet import reactor
     client = DeepstreamClient(url='ws://localhost:6020/deepstream', debug='verbose',)
     client.connect(lambda : client.login({}))
-    reactor.callLater(1, client.event.emit, 'chat', 'hello world')
-    reactor.callLater(1, client.event.subscribe, 'chat', the_callback)
+    client.whenAuthenticated(client.event.emit, 'chat', 'hello world')
+    client.whenAuthenticated(client.event.subscribe, 'chat', the_callback)
     # reactor.callLater(2, client.disconnect)
     reactor.run()
 
