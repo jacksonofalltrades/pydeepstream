@@ -103,32 +103,33 @@ class DeepstreamProtocol(Protocol):
         if message_action == constants.actions.ERROR:
             if (message_data and
                 message_data[0] == constants.event.TOO_MANY_AUTH_ATTEMPTS):
-                self.transport.loseConnection() # TODO: Prevent reconnection
+                self.factory._deliberate_close = True
+                self.factory._too_many_auth_attempts = True
+                if self._client:
+                    self._client._service.stopService()
+                else:
+                    self.transport.loseConnection()
             else:
                 self.factory._set_state(
                     constants.connection_state.AWAITING_AUTHENTICATION)
-            # auth_data = (self._get_auth_data(message_data[1]) if
-            #              data_size > 1 else None)
-            # if self._auth_future:
-            #     self._auth_future.set_result(
-            #         {'success': False,
-            #          'error': message_data[0] if data_size else None,
-            #          'message': auth_data}
-            #     )
+            auth_data = (self._get_auth_data(message_data[1]) if
+                          data_size > 1 else None)
+            if self.factory._auth_deferred:
+                self.factory.reactor.callLater(0, self.factory._auth_deferred.callback,
+                                                {'success': False,
+                                                'error': message_data[0] if data_size else None,
+                                                'message': auth_data})
         elif message_action == constants.actions.ACK:
             self.factory._set_state(constants.connection_state.OPEN)
-            # auth_data = (self._get_auth_data(message_data[0]) if
-            #             data_size else None)
-            # if self._auth_future:
-            #     self._auth_future.set_result(
-            #         {'success': True,
-            #          'error': None,
-            #          'message': auth_data}
-            #     )
-
-        # TODO: Flush outgoing message queue
-        # TODO: Offer a Deferred for finishing authentication?
-    def _connection_response_handler(self, message):
+            auth_data = (self._get_auth_data(message_data[0]) if
+                         data_size else None)
+            if self.factory._auth_deferred:
+                self.factory.reactor.callLater(0, self.factory._auth_deferred.callback,
+                                                {'success': True,
+                                                'error': None,
+                                                'message': auth_data})
+        self.factory._send_queued_messages()
+    def _handle_connection_response(self, message):
         self.debugExec()
         action = message['action']
         data = message['data']
@@ -139,7 +140,10 @@ class DeepstreamProtocol(Protocol):
             self.send(ping_response)
         elif action == constants.actions.ACK:
             self.factory._set_state(constants.connection_state.AWAITING_AUTHENTICATION)
-            self._send_auth_params()
+            if self.factory._connect_callback:
+                self.factory.reactor.callLater(0, self.factory._connect_callback)
+            if self.factory._auto_auth:
+                self._send_auth_params()
         elif action == constants.actions.CHALLENGE:
             challenge_response = message_builder.get_message(
                 constants.topic.CONNECTION,
@@ -147,6 +151,19 @@ class DeepstreamProtocol(Protocol):
                 [self.factory.url])
             self.factory._set_state(constants.connection_state.CHALLENGING)
             self.send(challenge_response)
+        elif action == constants.actions.REJECTION:
+            self._challenge_denied = True
+            self.close()
+        elif action == constants.actions.REDIRECT:
+            self.factory.url = data[0]
+            self._redirecting = True
+            self.close()
+        elif action == constants.actions.ERROR:
+            if data[0] == constants.event.CONNECTION_AUTHENTICATION_TIMEOUT:
+                self._deliberate_close = True
+                self._connection_auth_timeout = True
+                self._client._on_error(
+                    constants.topic.CONNECTION, data[0], data[1])
     def onClose(self, wasClean, code, reason):
         # TODO: Anything else to do?
         #       Should state be set to ERROR if wasClean is false?
@@ -179,6 +196,12 @@ class DeepstreamProtocol(Protocol):
             return
         if self.factory.debug == 'verbose':
             log.debug(inspect.stack()[1][3])
+    @property
+    def _client(self):
+        if hasattr(self.factory, 'client'):
+            return self.factory.client
+        else:
+            return None
 
 class WSDeepstreamProtocol(DeepstreamProtocol, WebSocketClientProtocol):
     def connectionMade(self):
@@ -200,6 +223,7 @@ class DeepstreamFactory(ClientFactory):
         # auth_params: (dict) # TODO: Document structure expected
         # authCallback (func) # Callback triggered by successful authentication
         self.url = url
+        self._original_url = url
         self.client = client
         self._state = constants.connection_state.CLOSED
         kwargs['url'] = url
@@ -209,6 +233,8 @@ class DeepstreamFactory(ClientFactory):
             import inspect
             txaio.start_logging(level='debug')
             print('Debug enabled.')
+            if self.debug == 'verbose':
+                defer.setDebugging(on=True)
 
         self._heartbeat_interval = kwargs.pop('heartbeat_interval', 100)
         self._heartbeat_tolerance = self._heartbeat_interval * 2
@@ -284,8 +310,13 @@ class DeepstreamFactory(ClientFactory):
             return deferred
     def startFactory(self):
         print("Starting DS factory")
-    # def buildProtocol(self, addr):
-    #     super(DeepstreamFactory, self).buildProtocol(addr)
+    def _send_queued_messages(self):
+        if self._state != constants.connection_state.OPEN:
+            return
+        while self._queued_messages:
+            raw_message, deferred = self._queued_messages.popleft()
+            r = defer.maybeDeferred(self._protocol_instance.send(raw_message))
+            r.chainDeferred(deferred)
 
 class WSDeepstreamFactory(DeepstreamFactory, WebSocketClientFactory):
     protocol = WSDeepstreamProtocol

@@ -4,14 +4,22 @@ from __future__ import unicode_literals
 from tornado import ioloop
 
 from deepstreampy import constants
+from deepstreampy.record import RecordHandler
+from deepstreampy.event import EventHandler
+from deepstreampy.rpc import RPCHandler
+from deepstreampy.presence import PresenceHandler
+
 from deepstreampy_twisted.protocol import WSDeepstreamFactory
 from deepstreampy_twisted import log
+
+from pyee import EventEmitter
 
 from deepstreampy.client import Client
 from deepstreampy.event import EventHandler
 from deepstreampy.message import connection, message_parser, message_builder
 from twisted.application.internet import ClientService
 from twisted.internet.endpoints import clientFromString
+from twisted.internet import defer
 
 from urlparse import urlparse
 
@@ -42,7 +50,19 @@ class ConnectionInterface(connection.Connection):
         return self.factory.send(raw_message)
     @property
     def _url(self):
-        return self._client._factory.url
+        return self.factory.url
+    @_url.setter
+    def _url(self, value):
+        self.factory.url = value
+    @property
+    def _original_url(self):
+        return self.factory._original_url
+    def connect(self, callback):
+        return self._client.connect(callback)
+    def authenticate(self, auth_params):
+        self.protocol.authenticate(auth_params)
+    def close(self):
+        self._client.disconnect()
 
 
 class DeepstreamClient(Client):
@@ -78,37 +98,45 @@ class DeepstreamClient(Client):
         self._endpoint = clientFromString(reactor, conn_string)
         self._service = ClientService(self._endpoint, self._factory) # Handles reconnection for us
 
-        super(Client, self).__init__()
+        EventEmitter.__init__(self)
         self._connection = ConnectionInterface(self, url)
-        # self._presence = PresenceHandler(self._connection, self, **options)
+        self._presence = PresenceHandler(self._connection, self, **options)
         self._event = EventHandler(self._connection, self, **options)
-        # self._rpc = RPCHandler(self._connection, self, **options)
-        # self._record = RecordHandler(self._connection, self, **options)
+        self._rpc = RPCHandler(self._connection, self, **options)
+        self._record = RecordHandler(self._connection, self, **options)
         self._message_callbacks = dict()
-        #
-        # self._message_callbacks[
-        #     constants.topic.PRESENCE] = self._presence.handle
-        #
+
+        self._message_callbacks[
+            constants.topic.PRESENCE] = self._presence.handle
         self._message_callbacks[
             constants.topic.EVENT] = self._event.handle
-        #
-        # self._message_callbacks[
-        #     constants.topic.RPC] = self._rpc.handle
-        #
-        # self._message_callbacks[
-        #     constants.topic.RECORD] = self._record.handle
-        #
-        # self._message_callbacks[constants.topic.ERROR] = self._on_error
+        self._message_callbacks[
+            constants.topic.RPC] = self._rpc.handle
+        self._message_callbacks[
+            constants.topic.RECORD] = self._record.handle
+        self._message_callbacks[
+            constants.topic.ERROR] = self._on_error
+
+
     def login(self, auth_params):
+        d = defer.Deferred()
         # TODO: turn in to Deferred to return after authenticated properly?
         raise NotImplementedError("This client implementation authenticates automatically after a successful connection. Specify auth_params before starting the connection.")
     def connect(self, callback=None):
-        # TODO: Pass callback to auth handler
-        self._service.startService()
+        if callback:
+            self._factory._connect_callback = callback
+        if not self._service.running:
+            self._service.startService()
+        return
+    def close(self):
+        return self.disconnect()
     def disconnect(self):
-        # TODO: Say goodbye, clear message queue
+        # TODO: Say goodbye; clear message queue?
+        self._factory._deliberate_close = True
         self._service.stopService()
-    def whenConnected(self):
+    def whenAuthenticated(self, callback, *args):
+        d = defer.Deferred()
+        d.addCallback(callback, *args)
         # Offer a deferred that will fire when we connect.
         pass
 
@@ -119,12 +147,10 @@ if __name__ == '__main__':
     def the_callback(message=None):
         print("Received event :" + str(message))
     from twisted.internet import reactor
-
     client = DeepstreamClient(url='ws://localhost:6020/deepstream', debug='verbose',)
-    reactor.callLater(0, client.connect)
+    client.connect(lambda : client.login({}))
     reactor.callLater(1, client.event.emit, 'chat', 'hello world')
     reactor.callLater(1, client.event.subscribe, 'chat', the_callback)
     # reactor.callLater(2, client.disconnect)
-    client.connect()
     reactor.run()
 

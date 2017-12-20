@@ -1,4 +1,4 @@
-"""Client for the deepstream.io realtime web server"""
+"""Twisted-compatible Client for the deepstream.io realtime web server"""
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
@@ -11,11 +11,12 @@ txaio.use_twisted()
 from deepstreampy import constants, message
 import deepstreampy_twisted
 from deepstreampy_twisted import protocol
-from deepstreampy_twisted.protocol import DeepstreamFactory, DeepstreamProtocol
+from deepstreampy_twisted.protocol import DeepstreamFactory, DeepstreamProtocol, WSDeepstreamProtocol, WSDeepstreamFactory
+from deepstreampy_twisted.interface import DeepstreamClient
 
 
 
-__all__ = ["DeepstreamClient, DeepstreamFactory, DeepstreamProtocol"]
+__all__ = ["DeepstreamClient, WSDeepstreamFactory, WSDeepstreamProtocol"]
 
 
 version = "0.2.0"

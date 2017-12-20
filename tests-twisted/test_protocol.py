@@ -15,7 +15,8 @@ class ProtocolTests(unittest.TestCase):
     url = 'ws://localhost:0/deepstream'
     def setUp(self):
         self.client = mock.Mock()
-        self.factory = protocol.DeepstreamFactory(ProtocolTests.url, client=self.client, debug='verbose')
+        self.factory = protocol.DeepstreamFactory(
+            ProtocolTests.url, client=self.client, debug='verbose', authParams={})
         self.clock = task.Clock()
         self.proto = self.factory.buildProtocol(('localhost', 0))
         self.proto.callLater = self.clock.callLater
@@ -78,7 +79,20 @@ class ProtocolTests(unittest.TestCase):
         self.proto.makeConnection(self.tr)
         self.factory._state = constants.connection_state.CHALLENGING
         self._test('C|A+', 'A|REQ|{}+')
+
         self._server_emit('A|E+')
+        self.assertEqual(self.factory._state, constants.connection_state.AWAITING_AUTHENTICATION)
+        self.proto._send_auth_params()
+
+        self._server_emit('A|E+')
+        self.assertEqual(self.factory._state, constants.connection_state.AWAITING_AUTHENTICATION)
+        self.proto._send_auth_params()
+
+        self._server_emit('A|E|%s+' % constants.event.TOO_MANY_AUTH_ATTEMPTS)
+        self.assertTrue(self.factory._too_many_auth_attempts)
+    # def test_redirect(self):
+    #     raise NotImplementedError
+    #     # Still need to write this test.
 
 
 
