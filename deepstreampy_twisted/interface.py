@@ -8,10 +8,13 @@ from tornado import ioloop
 
 from deepstreampy import constants
 from deepstreampy.record import RecordHandler
-from deepstreampy.event import EventHandler
-from deepstreampy.rpc import RPCHandler
-from deepstreampy.presence import PresenceHandler
+# from deepstreampy.event import EventHandler
+# from deepstreampy.rpc import RPCHandler
+# from deepstreampy.presence import PresenceHandler
 
+from deepstreampy_twisted.patch import PatchedEventHandler as EventHandler, \
+    PatchedPresenceHandler as PresenceHandler, \
+    PatchedRPCHandler as RPCHandler
 from deepstreampy_twisted.protocol import WSDeepstreamFactory, WSDeepstreamProtocol
 from deepstreampy_twisted import log
 
@@ -19,7 +22,7 @@ from pyee import EventEmitter
 
 from deepstreampy.client import Client
 from deepstreampy.event import EventHandler
-from deepstreampy.message import connection, message_parser, message_builder
+from deepstreampy.message import connection
 from twisted.application.internet import ClientService
 from twisted.internet.endpoints import clientFromString
 from twisted.internet import defer
