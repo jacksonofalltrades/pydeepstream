@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
-from deepstreampy_twisted import DeepstreamClient
+from deepstreampy_twisted import DeepstreamClient, DeepstreamFactory
 from deepstreampy import rpc
 from deepstreampy import constants
 from tests.util import msg
@@ -22,6 +22,9 @@ URL = "ws://localhost:7777/deepstream"
 class RPCParent(testing.AsyncTestCase):
     def setUp(self, options):
         super(RPCParent, self).setUp()
+        self.reactor = task.Clock()
+        options['reactor'] = self.reactor
+        options['factory'] = DeepstreamFactory
         self.client = DeepstreamClient(URL, **options)
         self.handler = mock.Mock()
         self.handler.stream.closed = mock.Mock(return_value=False)
@@ -49,6 +52,11 @@ class RPCParent(testing.AsyncTestCase):
             'deepstreampy.utils.get_uid', return_value='1')
         get_uid_patcher.start()
         self.addCleanup(get_uid_patcher.stop)
+    def tearDown(self):
+        self.tr.loseConnection()
+        self.connection.io_loop.close()
+        for call in self.reactor.getDelayedCalls():
+            call.cancel()
 
 class RPCHandlerTest(RPCParent):
 

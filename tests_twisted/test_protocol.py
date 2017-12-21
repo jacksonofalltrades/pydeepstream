@@ -1,30 +1,46 @@
 from deepstreampy_twisted import protocol
 from deepstreampy import constants
 from twisted.trial import unittest
+
 from twisted.test import proto_helpers
 import sys
 from twisted.internet import task
+
 
 if sys.version_info[0] < 3:
     import mock
 else:
     from unittest import mock
-
+import twisted
+twisted.internet.base.DelayedCall.debug = True
 
 class ProtocolTests(unittest.TestCase):
     url = 'ws://localhost:0/deepstream'
     def setUp(self):
         self.client = mock.Mock()
+        self.reactor = task.Clock()
+        # debug = 'verbose'
+        debug = False
         self.factory = protocol.DeepstreamFactory(
-            ProtocolTests.url, client=self.client, debug='verbose', authParams={})
-        self.clock = task.Clock()
+            ProtocolTests.url,
+            client=self.client,
+            authParams={},
+            debug=debug,
+            reactor=self.reactor)
+        self.clock = self.reactor
         self.proto = self.factory.buildProtocol(('localhost', 0))
+        self.factory._protocol_instance = self.proto
         self.proto.callLater = self.clock.callLater
+
         self.tr = proto_helpers.StringTransport()
         self.tr.protocol = self.proto
         self.proto.transport = self.tr
+
     def tearDown(self):
         self.tr.loseConnection()
+        for call in self.clock.getDelayedCalls():
+            call.cancel()
+        self.clock.advance(1)
 
     def _decode(self, message):
         message.replace(chr(31), '|').replace(chr(30), '+')
@@ -71,10 +87,21 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(self.factory._state, constants.connection_state.AUTHENTICATING) # Potential timing issue
     def test_anon_auth(self):
         self.proto.makeConnection(self.tr)
-        self.factory._state = constants.connection_state.CHALLENGING
-        self._test('C|A+', 'A|REQ|{}+')
+        self.factory._set_state(constants.connection_state.AWAITING_AUTHENTICATION)
+
+        d = self.factory.authenticate({})
+        d.addCallback(self.assertEqual, {'message': None,
+                             'success': True,
+                             'error': None})
+
+        self.clock.advance(1)
+        self.assertEqual(self._decode(self.tr.value()), 'A|REQ|{}+')
+
         self._server_emit('A|A+')
+        self.clock.advance(1)
         self.assertEqual(self.factory._state, constants.connection_state.OPEN)
+        self.clock.advance(1)
+
     def test_too_many_auths(self):
         self.proto.makeConnection(self.tr)
         self.factory._state = constants.connection_state.CHALLENGING

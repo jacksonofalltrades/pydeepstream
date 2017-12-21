@@ -6,10 +6,11 @@ from deepstreampy.message import message_builder, message_parser
 from deepstreampy.constants import topic, actions, types
 from deepstreampy.constants import topic as topic_constants
 from deepstreampy.constants import event as event_constants
-from deepstreampy_twisted import DeepstreamClient
+from deepstreampy_twisted import DeepstreamClient, DeepstreamFactory
+from twisted.internet import task
 
 import json
-import unittest
+from twisted.trial import unittest
 
 URL = "ws://localhost:7777/deepstream"
 
@@ -17,7 +18,12 @@ class MessageTest(unittest.TestCase):
 
     def setUp(self):
         # This client will never connect
-        self.client = DeepstreamClient(URL)
+        self.reactor = task.Clock()
+        self.client = DeepstreamClient(URL, reactor=self.reactor, factory=DeepstreamFactory)
+    def tearDown(self):
+        self.client._connection.io_loop.close()
+        for call in self.reactor.getDelayedCalls():
+            call.cancel()
 
     def test_message_build_and_parse(self):
         """Test building messages and parsing them back correctly."""

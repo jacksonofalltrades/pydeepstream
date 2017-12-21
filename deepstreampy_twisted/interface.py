@@ -100,7 +100,8 @@ class DeepstreamClient(Client):
         if not reactor or reactor is None:
             from twisted.internet import reactor
         self.reactor = reactor
-        self._factory = WSDeepstreamFactory(url, self, debug=options.pop('debug', False), reactor=reactor, **options)
+        factory = options.pop('factory', WSDeepstreamFactory)
+        self._factory = factory(url, self, debug=options.pop('debug', False), reactor=reactor, **options)
         self._endpoint = clientFromString(reactor, conn_string)
         self._service = ClientService(self._endpoint, self._factory) # Handles reconnection for us
 

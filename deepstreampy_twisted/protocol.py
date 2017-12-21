@@ -123,7 +123,7 @@ class DeepstreamProtocol(Protocol):
             self.factory._set_state(constants.connection_state.OPEN)
             auth_data = (self._get_auth_data(message_data[0]) if
                          data_size else None)
-            if self.factory._auth_deferred:
+            if self.factory._auth_deferred and self.factory._auth_deferred is not None:
                 self.factory.reactor.callLater(0, self.factory._auth_deferred.callback,
                                                 {'success': True,
                                                 'error': None,
@@ -223,6 +223,10 @@ class DeepstreamFactory(ClientFactory):
         # auth_params: (dict) # TODO: Document structure expected
         # authCallback (func) # Callback triggered by successful authentication
         self.url = url
+        self.reactor = kwargs.pop('reactor', None)
+        if self.reactor is None:
+            from twisted.internet import reactor
+            self.reactor = reactor
         self._original_url = url
         self.client = client
         self._state = constants.connection_state.CLOSED
@@ -264,7 +268,8 @@ class DeepstreamFactory(ClientFactory):
 
     def authenticate(self, auth_params):
         self.authParams = auth_params
-        if not self._auth_deferred:
+        result = None
+        if not self._auth_deferred or self._auth_deferred is None:
             self._auth_deferred = defer.Deferred()
         if (self._too_many_auth_attempts or
                 self._challenge_denied or
@@ -282,11 +287,10 @@ class DeepstreamFactory(ClientFactory):
             self._deliberate_close = False
             if not self.client._service.running:
                 self.client.connect(callback=lambda: self.authenticate(auth_params))
-
-        if self._state == constants.connection_state.AWAITING_AUTHENTICATION:
-            return self._protocol_instance._send_auth_params()
+        elif self._state == constants.connection_state.AWAITING_AUTHENTICATION:
+            self.reactor.callLater(0, self._protocol_instance._send_auth_params)
         if result:
-            return self._auth_deferred.callback(result)
+            self.reactor.callLater(0,self._auth_deferred.callback, result)
         return self._auth_deferred
     def _set_state(self, state):
         # This state keeps track of the connection with Deepstream per the
@@ -295,7 +299,7 @@ class DeepstreamFactory(ClientFactory):
         self._state = state
         if self.client:
             self.client.emit(constants.event.CONNECTION_STATE_CHANGED, state)
-        print "State set to " + str(state)
+        log.info("Deepstream connection state set to " + str(state))
     def setAuth(self, authParams):
         # This is a dict containing authentication parameters to send to the Deepstream server.
         self.authParams = authParams
