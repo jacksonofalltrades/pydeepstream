@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Adapted from https://github.com/YavorPaunov/deepstreampy under MIT License
+# Author: Will Crawford, github.com/sapid
+from __future__ import print_function
 from twisted.internet import defer, task as twisted_task
 from twisted.internet.protocol import Protocol, ClientFactory
 from deepstreampy import constants
@@ -32,36 +35,17 @@ class DeepstreamProtocol(Protocol):
         l = twisted_task.LoopingCall(self._heartbeat)
         self.factory._heartbeat_looper = l
         self.factory._protocol_instance = self
-    def _catch_error(self, topic, event, msg=None):
-        self.debugExec()
-        # Adapted from https://github.com/YavorPaunov/deepstreampy under MIT License
-        if event in (constants.event.ACK_TIMEOUT,
-                     constants.event.RESPONSE_TIMEOUT):
-            if (self.factory._state == constants.connection_state.AWAITING_AUTHENTICATION):
-                error_msg = ("Message timed out because authentication is incomplete.")
-                self.factory.reactor.callLater(0.1, lambda: self._catch_error(event.NOT_AUTHENTICATED,
-                                                                              constants.topic.ERROR,
-                                                                              error_msg))
-        # TODO: If we end up having listeners for errors, notify them here.
-        #         Use pyee?
-        raw_error_message = event + ': ' + msg
-        if topic:
-            raw_error_message += ' (' + topic + ')'
-        raise ValueError(raw_error_message)
     def onMessage(self, payload, isBinary):
         self.debugExec()
         if isBinary:
             raise NotImplementedError("Received binary message; expected string")
         self.debug("Received: " + payload)
-        # TODO: Do we need to catch decoding errors?
-        #text = payload.decode('UTF-8', errors='strict') # Unnecessary?
         full_buffer = self.factory._message_buffer + payload
         split_buffer = full_buffer.rsplit(constants.message.MESSAGE_SEPERATOR, 1)
         if len(split_buffer) > 1:
             self.factory._message_buffer = split_buffer[1]
         raw_messages = split_buffer[0]
-        # TODO Urgent: Uncomment below once message_parser is fixed
-        parsed_messages = message_parser.parse(raw_messages, ErrorCatcher(self._catch_error))
+        parsed_messages = message_parser.parse(raw_messages, self.factory.client)
         for msg in parsed_messages:
             if msg is None:
                 continue
@@ -72,8 +56,6 @@ class DeepstreamProtocol(Protocol):
             else:
                 self.factory.client._on_message(parsed_messages[0])
 
-    # def dataReceived(self, data):
-    #     self.log.debug(data)
     def _heartbeat(self):
         self.debugExec()
         elapsed = time.time() - self.factory._heartbeat_last
@@ -95,7 +77,7 @@ class DeepstreamProtocol(Protocol):
     def _get_auth_data(self, data):
         self.debugExec()
         if data:
-            return message_parser.convert_typed(data, ErrorCatcher(self._catch_error()))
+            return message_parser.convert_typed(data, self.factory.client)
     def _handle_auth_response(self, message):
         message_data = message['data']
         message_action = message['action']
@@ -165,8 +147,8 @@ class DeepstreamProtocol(Protocol):
                 self._client._on_error(
                     constants.topic.CONNECTION, data[0], data[1])
     def onClose(self, wasClean, code, reason):
-        # TODO: Anything else to do?
-        #       Should state be set to ERROR if wasClean is false?
+        if wasClean:
+            self.factory._set_state(constants.connection_state.ERROR)
         self.factory._set_state(constants.connection_state.CLOSED)
         self.log.info("WebSocket connection closed: {}".format(reason))
         if self.factory._heartbeat_looper and self.factory._heartbeat_looper.running:
@@ -218,9 +200,12 @@ class DeepstreamFactory(ClientFactory):
     protocol = DeepstreamProtocol
     def __init__(self, url, client=None, *args, **kwargs):
         # url: (str) the URL to connect to
-        # debug: (bool) (optional) print debug messages
+        # reactor (IReactor) (optional) the reactor instance
+        # debug: (bool or str) (optional) print debug messages, 'verbose' for more debug messages
         # heartbeat_interval: (double) (optional) interval to check heartbeat
-        # auth_params: (dict) # TODO: Document structure expected
+        # auth_params: (dict) (optional) e.g. {} or {'username': 'AzureDiamond', 'password': 'hunter2'}
+        #              Providing auth_params will enable auto-auth on connect;
+        #              otherwise, auth must be done manually with self.authenticate or client.login
         # authCallback (func) # Callback triggered by successful authentication
         self.url = url
         self.reactor = kwargs.pop('reactor', None)

@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
 from tornado.platform.twisted import TwistedIOLoop
-TwistedIOLoop().install() # TODO: Is this compatible with alternative reactors?
+TwistedIOLoop().install() # Incompatible with alternative reactors.
 from twisted.logger import Logger
 log = Logger()
 import txaio

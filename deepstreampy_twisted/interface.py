@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# Adapted from https://github.com/YavorPaunov/deepstreampy under MIT License
+# Author: Will Crawford, github.com/sapid
 from __future__ import absolute_import, division, print_function, with_statement
 from __future__ import unicode_literals
 
@@ -25,6 +28,7 @@ from urlparse import urlparse
 
 
 class ConnectionInterface(connection.Connection):
+    # This class serves as a compatibility layer for deepstreampy.client
     def __init__(self, client, url, **options):
         self._io_loop = ioloop.IOLoop.current()
         self._client = client
@@ -37,7 +41,6 @@ class ConnectionInterface(connection.Connection):
     @_state.setter
     def __set_state(self, s):
         self.factory._state = s
-
     @property
     @defer.inlineCallbacks
     def protocol(self):
@@ -74,11 +77,11 @@ class ConnectionInterface(connection.Connection):
 class DeepstreamClient(Client):
     def __init__(self, url=None, conn_string=None, authParams=None, reactor=None, **options):
         # Optional params for...
-        #   Client: conn_string, authParams, reactor
-        #   protocol: heartbeat_interval TODO
-        #   rpc: TODO
-        #   record: TODO
-        #   presence: TODO
+        #   Client: url (required), authParams, reactor, conn_string, debug, factory
+        #   protocol: url (required), authParams, heartbeat_interval
+        #   rpc: rpcAckTimeout, rpcResponseTimeout, subscriptionTimeout
+        #   record: recordReadAckTimeout, merge_strategy, recordReadTimeout, recordDeleteTimeout, recordDeepCopy,
+        #   presence: subscriptionTimeout
         if not url or url is None:
             raise ValueError("url is None; you must specify a  URL for the deepstream server, e.g. ws://localhost:6020/deepstream")
         parse_result = urlparse(url)

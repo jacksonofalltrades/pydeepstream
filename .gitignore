@@ -108,3 +108,6 @@ dropin.cache
 
 # behave
 /tmp
+
+# trial
+_trial_tmp/
