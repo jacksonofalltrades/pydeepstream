@@ -326,9 +326,13 @@ class WSDeepstreamFactory(DeepstreamFactory, WebSocketClientFactory):
 if __name__ == '__main__':
     from twisted.internet import reactor
     from twisted.internet.endpoints import clientFromString
-
+    def do_auth(factory):
+        factory.authenticate({})
+        d = factory._auth_deferred
+        d.addCallback(print)
     factory = WSDeepstreamFactory("ws://localhost:6020/deepstream", debug='verbose')
     factory.protocol = WSDeepstreamProtocol
     endpoint = clientFromString(reactor, "tcp:localhost:6020")
     endpoint.connect(factory)
+    reactor.callLater(1, do_auth, factory)
     reactor.run()
