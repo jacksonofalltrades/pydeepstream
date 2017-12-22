@@ -6,7 +6,7 @@ from deepstreampy.constants import connection_state
 from deepstreampy_twisted import DeepstreamClient, DeepstreamFactory
 from twisted.test import proto_helpers
 from twisted.internet import task
-from tests_twisted.utils import msg
+from tests.utils import msg
 from twisted.trial import unittest
 import sys
 
