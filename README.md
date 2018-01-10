@@ -11,7 +11,8 @@ pip install ./
 ```
 Or, alternatively,
 ```#From the repo root folder
-pip install --process-dependency-links ./```
+pip install --process-dependency-links ./
+```
 
 ### Usage
 ```
@@ -30,9 +31,9 @@ pip install --process-dependency-links ./```
 
 
 ## Running the tests
-First, install the extra dev requirements
-`pip install -r dev_requirements.txt`
-Then you may run the tests
+First, install the extra dev requirements  
+`pip install -r dev_requirements.txt`  
+Then you may run the tests  
 `trial tests`
 
 ## Built With
