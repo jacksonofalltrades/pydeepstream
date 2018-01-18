@@ -8,9 +8,6 @@ from tornado import ioloop
 
 from deepstreampy import constants
 from deepstreampy.record import RecordHandler
-# from deepstreampy.event import EventHandler
-# from deepstreampy.rpc import RPCHandler
-# from deepstreampy.presence import PresenceHandler
 
 from deepstreampy_twisted.patch import PatchedEventHandler as EventHandler, \
     PatchedPresenceHandler as PresenceHandler, \
@@ -31,7 +28,9 @@ from urlparse import urlparse
 
 
 class ConnectionInterface(connection.Connection):
-    # This class serves as a compatibility layer for deepstreampy.client
+    '''This class largely serves as a compatibility layer for the original Tornado Deepstream client.
+    Interaction with this interface should be largely unnecessary; the Client implements an interface to the
+    functions an end-user is likely to need to use.'''
     def __init__(self, client, url, **options):
         self._io_loop = ioloop.IOLoop.current()
         self._client = client
@@ -78,13 +77,22 @@ class ConnectionInterface(connection.Connection):
 
 
 class DeepstreamClient(Client):
+    '''
+    This class instantiates an interface to interact with a Deepstream server.
+
+    This class is the recommended mechanism for interacting with this module. It provides an interface to the other
+    classes, each of which encapsulate a feature: Connection, Records, Events, RPC, and Presence.
+    '''
     def __init__(self, url=None, conn_string=None, authParams=None, reactor=None, **options):
-        # Optional params for...
-        #   Client: url (required), authParams, reactor, conn_string, debug, factory
-        #   protocol: url (required), authParams, heartbeat_interval
-        #   rpc: rpcAckTimeout, rpcResponseTimeout, subscriptionTimeout
-        #   record: recordReadAckTimeout, merge_strategy, recordReadTimeout, recordDeleteTimeout, recordDeepCopy,
-        #   presence: subscriptionTimeout
+        ''' Creates the client, but does not connect to the server automatically.
+        Optional keyword parameters (**options) for...
+           Client: url (required), authParams, reactor, conn_string, debug, factory
+           protocol: url (required), authParams, heartbeat_interval
+           rpc: rpcAckTimeout, rpcResponseTimeout, subscriptionTimeout
+           record: recordReadAckTimeout, merge_strategy, recordReadTimeout, recordDeleteTimeout, recordDeepCopy,
+           presence: subscriptionTimeout
+        '''
+
         if not url or url is None:
             raise ValueError("url is None; you must specify a  URL for the deepstream server, e.g. ws://localhost:6020/deepstream")
         parse_result = urlparse(url)
@@ -131,25 +139,70 @@ class DeepstreamClient(Client):
             constants.topic.ERROR] = self._on_error
 
     def login(self, auth_params):
+        '''
+        Submit authentication credentials to the server once state is "Awaiting Authentication."
+
+        Expects a dictionary.
+        Options:
+          User/pass: {'username': 'my_username', 'password': 'hunter2'}
+          Anonymous login/Open auth: {}
+            https://deepstreamhub.com/tutorials/guides/open-auth/
+          Email: {'type': 'email', 'email': 'my@email.com', 'password': 'hunter2'}
+            https://deepstreamhub.com/tutorials/guides/email-auth/
+          Token: {'token': 'abcdefg'}
+            https://deepstreamhub.com/tutorials/guides/token-auth/
+
+        Returns a Deferred
+        '''
         return self._connection.authenticate(auth_params)
     def connect(self, callback=None):
+        '''
+        Connect to the server. Optionally, fire a callback once connected.
+
+        Recommended callback is a login function.
+        Calling the login function is automatic if the DeepstreamClient is instantiated with auth_params.
+        '''
         if callback:
             self._factory._connect_callback = callback
         if not self._service.running:
             self._service.startService()
         return
     def close(self):
+        '''Legacy method: disconnect from the server.'''
         return self.disconnect()
     def disconnect(self):
+        '''Terminate our connection to the server.'''
         # TODO: Say goodbye; clear message queue?
         self._factory._deliberate_close = True
         self._service.stopService()
     def whenAuthenticated(self, callback, *args):
+        '''Execute a callback once authentication has succeeded.'''
         if self._factory._state == constants.connection_state.OPEN:
             callback(*args)
         else:
             self.once(constants.event.CONNECTION_STATE_CHANGED,
                               lambda x: DeepstreamClient.whenAuthenticated(self, callback, *args))
+
+    # These properties are the same as in the parent class, but are repeated here for clarity
+    @property
+    def connection_state(self):
+        return self._connection.state
+
+    @property
+    def record(self):
+        return self._record
+
+    @property
+    def event(self):
+        return self._event
+
+    @property
+    def rpc(self):
+        return self._rpc
+
+    @property
+    def presence(self):
+        return self._presence
 
 
 
