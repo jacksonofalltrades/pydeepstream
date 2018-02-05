@@ -15,19 +15,18 @@ pip install --process-dependency-links ./
 ```
 
 ### Usage
+In this example, we connect to a local Deepstream server, login anonymously, say hello to the 'chat' topic, subscribe to that topic, and then disconnect after 2 seconds.
 ```
-    def the_callback(message=None):
-        print("Received event :" + str(message))
-    from twisted.internet import reactor
-    client = DeepstreamClient(url='ws://localhost:6020/deepstream', debug='verbose',)
-    client.connect(lambda : client.login({}))
-    client.whenAuthenticated(client.event.emit, 'chat', 'hello world')
-    client.whenAuthenticated(client.event.subscribe, 'chat', the_callback)
-    # reactor.callLater(2, client.disconnect)
-    reactor.run()
+def the_callback(message=None):
+    print("Received event :" + str(message))
+from twisted.internet import reactor # Select your reactor
+client = DeepstreamClient(url='ws://localhost:6020/deepstream', debug='verbose',) # Debug has three options: False disables it, "verbose" enables verbose mode, and any other value enables normal debug mode.
+client.connect(lambda : client.login({}))
+client.whenAuthenticated(client.event.emit, 'chat', 'hello world') # Submit "hello world" to any listeners on the "chat" topic
+client.whenAuthenticated(client.event.subscribe, 'chat', the_callback) # "Subscribe to the "chat" topic; upon receiving an event, call the callback we defined earlier
+reactor.callLater(2, client.disconnect) # Two seconds after running the reactor, disconnect.
+reactor.run()
 ```
-
-( TODO - Better example code. )
 
 
 ## Running the tests
@@ -43,7 +42,7 @@ Then you may run the tests
 * [deepstreampy](https://github.com/YavorPaunov/deepstreampy) - provides an interface for deepstreampy's non-connection-related features
 
 ## Authors
-* **Will Crawford** - *Initial work (Twisted adaptation)* - [Sapid](https://github.com/sapid)
+* **Will Crawford** - Adaptation to Twisted; connection layer in Twisted + interface to  - [Sapid](https://github.com/sapid)
 
 ## License
 This project is licensed under MIT - see the [LICENSE](LICENSE) file for details.
