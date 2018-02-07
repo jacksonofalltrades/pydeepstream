@@ -24,25 +24,30 @@ from twisted.application.internet import ClientService
 from twisted.internet.endpoints import clientFromString
 from twisted.internet import defer
 
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 
 class ConnectionInterface(connection.Connection):
     '''This class largely serves as a compatibility layer for the original Tornado Deepstream client.
     Interaction with this interface should be largely unnecessary; the Client implements an interface to the
     functions an end-user is likely to need to use.'''
+
     def __init__(self, client, url, **options):
         self._io_loop = ioloop.IOLoop.current()
         self._client = client
+
     @property
     def state(self):
         return self.factory._state
+
     @property
     def _state(self):
         return self.factory._state
+
     @_state.setter
     def __set_state(self, s):
         self.factory._state = s
+
     @property
     @defer.inlineCallbacks
     def protocol(self):
@@ -51,27 +56,36 @@ class ConnectionInterface(connection.Connection):
             defer.returnValue(proto_d)
         else:
             raise Exception("Failed to retrieve protocol")
+
     @protocol.setter
     def _set_protocol(self, p):
         raise NotImplementedError("Setting the protocol is not implemented via this attribute.")
+
     @property
     def factory(self):
         return self._client._factory
+
     def send(self, raw_message):
         return self.factory.send(raw_message)
+
     @property
     def _url(self):
         return self.factory.url
+
     @_url.setter
     def _url(self, value):
         self.factory.url = value
+
     @property
     def _original_url(self):
         return self.factory._original_url
+
     def connect(self, callback):
         return self._client.connect(callback)
+
     def authenticate(self, auth_params):
         self.factory.authenticate(auth_params)
+
     def close(self):
         self._client.disconnect()
 
@@ -83,6 +97,7 @@ class DeepstreamClient(Client):
     This class is the recommended mechanism for interacting with this module. It provides an interface to the other
     classes, each of which encapsulate a feature: Connection, Records, Events, RPC, and Presence.
     '''
+
     def __init__(self, url=None, conn_string=None, authParams=None, reactor=None, **options):
         ''' Creates the client, but does not connect to the server automatically.
         Optional keyword parameters (**options) for...
@@ -94,7 +109,8 @@ class DeepstreamClient(Client):
         '''
 
         if not url or url is None:
-            raise ValueError("url is None; you must specify a  URL for the deepstream server, e.g. ws://localhost:6020/deepstream")
+            raise ValueError(
+                "url is None; you must specify a  URL for the deepstream server, e.g. ws://localhost:6020/deepstream")
         parse_result = urlparse(url)
         if not authParams or authParams is None:
             authParams = {}
@@ -110,14 +126,15 @@ class DeepstreamClient(Client):
                 else:
                     conn_string += ':6020'
         if not conn_string or conn_string is None:
-            raise ValueError("Could not parse conn string from URL; you must specify a Twisted endpoint descriptor for the server, e.g. tcp:127.0.0.1:6020")
+            raise ValueError(
+                "Could not parse conn string from URL; you must specify a Twisted endpoint descriptor for the server, e.g. tcp:127.0.0.1:6020")
         if not reactor or reactor is None:
             from twisted.internet import reactor
         self.reactor = reactor
         factory = options.pop('factory', WSDeepstreamFactory)
         self._factory = factory(url, self, debug=options.pop('debug', False), reactor=reactor, **options)
         self._endpoint = clientFromString(reactor, conn_string)
-        self._service = ClientService(self._endpoint, self._factory) # Handles reconnection for us
+        self._service = ClientService(self._endpoint, self._factory)  # Handles reconnection for us
 
         EventEmitter.__init__(self)
         self._connection = ConnectionInterface(self, url)
@@ -155,6 +172,7 @@ class DeepstreamClient(Client):
         Returns a Deferred
         '''
         return self._connection.authenticate(auth_params)
+
     def connect(self, callback=None):
         '''
         Connect to the server. Optionally, fire a callback once connected.
@@ -167,21 +185,24 @@ class DeepstreamClient(Client):
         if not self._service.running:
             self._service.startService()
         return
+
     def close(self):
         '''Legacy method: disconnect from the server.'''
         return self.disconnect()
+
     def disconnect(self):
         '''Terminate our connection to the server.'''
         # TODO: Say goodbye; clear message queue?
         self._factory._deliberate_close = True
         self._service.stopService()
+
     def whenAuthenticated(self, callback, *args):
         '''Execute a callback once authentication has succeeded.'''
         if self._factory._state == constants.connection_state.OPEN:
             callback(*args)
         else:
             self.once(constants.event.CONNECTION_STATE_CHANGED,
-                              lambda x: DeepstreamClient.whenAuthenticated(self, callback, *args))
+                      lambda x: DeepstreamClient.whenAuthenticated(self, callback, *args))
 
     # These properties are the same as in the parent class, but are repeated here for clarity
     @property
@@ -205,16 +226,17 @@ class DeepstreamClient(Client):
         return self._presence
 
 
-
-
 if __name__ == '__main__':
     def the_callback(message=None):
         print("Received event :" + str(message))
+
+
     from twisted.internet import reactor
-    client = DeepstreamClient(url='ws://localhost:6020/deepstream', debug='verbose',)
-    client.connect(lambda : client.login({}))
-    client.whenAuthenticated(client.event.emit, 'chat', 'hello world')
+
+    client = DeepstreamClient(url='ws://localhost:6020/deepstream', debug='verbose', )
+    client.connect(
+        lambda: client.login({}))  # If need auth, will be {'username': 'your_username', 'password': 'your_password'}
     client.whenAuthenticated(client.event.subscribe, 'chat', the_callback)
+    client.whenAuthenticated(client.event.emit, 'chat', 'hello world')
     # reactor.callLater(2, client.disconnect)
     reactor.run()
-
