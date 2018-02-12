@@ -21,12 +21,25 @@ def the_callback(message=None):
     print("Received event :" + str(message))
 from twisted.internet import reactor # Select your reactor
 client = DeepstreamClient(url='ws://localhost:6020/deepstream', debug='verbose',) # Debug has three options: False disables it, "verbose" enables verbose mode, and any other value enables normal debug mode.
-client.connect(lambda : client.login({}))
+client.connect(lambda : client.login({})) # .connect accepts a callback once connection is established to trigger authentication
 client.whenAuthenticated(client.event.emit, 'chat', 'hello world') # Submit "hello world" to any listeners on the "chat" topic
 client.whenAuthenticated(client.event.subscribe, 'chat', the_callback) # "Subscribe to the "chat" topic; upon receiving an event, call the callback we defined earlier
 reactor.callLater(2, client.disconnect) # Two seconds after running the reactor, disconnect.
 reactor.run()
 ```
+
+For further reading, start in the `DeepstreamClient` class in `deepstreampy_twisted/interface.py`
+
+Also check out the functions in `EventEmitter`, from which DeepstreamClient inherits.    
+The events available are defined upstream in [`deepstreampy.constants.event`](https://github.com/YavorPaunov/deepstreampy/blob/dev/deepstreampy/constants/event.py).  
+These events are distinct from the Deepstream.io Events feature; they are used only internally.  
+
+`DeepstreamClient` also makes some upstream features available as properties. To investigate their interface, see the code upstream:
+- [Events](https://github.com/YavorPaunov/deepstreampy/blob/dev/deepstreampy/event.py)
+- [RPC](https://github.com/YavorPaunov/deepstreampy/blob/dev/deepstreampy/rpc.py)
+- [Records](https://github.com/YavorPaunov/deepstreampy/blob/dev/deepstreampy/record.py)
+- [Presence](https://github.com/YavorPaunov/deepstreampy/blob/dev/deepstreampy/presence.py)
+ 
 
 
 ## Running the tests

@@ -27,55 +27,6 @@ from twisted.internet import defer
 from urlparse import urlparse
 
 
-class ConnectionInterface(connection.Connection):
-    '''This class largely serves as a compatibility layer for the original Tornado Deepstream client.
-    Interaction with this interface should be largely unnecessary; the Client implements an interface to the
-    functions an end-user is likely to need to use.'''
-    def __init__(self, client, url, **options):
-        self._io_loop = ioloop.IOLoop.current()
-        self._client = client
-    @property
-    def state(self):
-        return self.factory._state
-    @property
-    def _state(self):
-        return self.factory._state
-    @_state.setter
-    def __set_state(self, s):
-        self.factory._state = s
-    @property
-    @defer.inlineCallbacks
-    def protocol(self):
-        proto_d = yield self._client._service.whenConnected()
-        if isinstance(proto_d, WSDeepstreamProtocol):
-            defer.returnValue(proto_d)
-        else:
-            raise Exception("Failed to retrieve protocol")
-    @protocol.setter
-    def _set_protocol(self, p):
-        raise NotImplementedError("Setting the protocol is not implemented via this attribute.")
-    @property
-    def factory(self):
-        return self._client._factory
-    def send(self, raw_message):
-        return self.factory.send(raw_message)
-    @property
-    def _url(self):
-        return self.factory.url
-    @_url.setter
-    def _url(self, value):
-        self.factory.url = value
-    @property
-    def _original_url(self):
-        return self.factory._original_url
-    def connect(self, callback):
-        return self._client.connect(callback)
-    def authenticate(self, auth_params):
-        self.factory.authenticate(auth_params)
-    def close(self):
-        self._client.disconnect()
-
-
 class DeepstreamClient(Client):
     '''
     This class instantiates an interface to interact with a Deepstream server.
@@ -204,7 +155,53 @@ class DeepstreamClient(Client):
     def presence(self):
         return self._presence
 
-
+class ConnectionInterface(connection.Connection):
+    '''This class largely serves as a compatibility layer for the original Tornado Deepstream client.
+    Interaction with this interface should be largely unnecessary; the Client implements an interface to the
+    functions an end-user is likely to need to use.'''
+    def __init__(self, client, url, **options):
+        self._io_loop = ioloop.IOLoop.current()
+        self._client = client
+    @property
+    def state(self):
+        return self.factory._state
+    @property
+    def _state(self):
+        return self.factory._state
+    @_state.setter
+    def __set_state(self, s):
+        self.factory._state = s
+    @property
+    @defer.inlineCallbacks
+    def protocol(self):
+        proto_d = yield self._client._service.whenConnected()
+        if isinstance(proto_d, WSDeepstreamProtocol):
+            defer.returnValue(proto_d)
+        else:
+            raise Exception("Failed to retrieve protocol")
+    @protocol.setter
+    def _set_protocol(self, p):
+        raise NotImplementedError("Setting the protocol is not implemented via this attribute.")
+    @property
+    def factory(self):
+        return self._client._factory
+    def send(self, raw_message):
+        return self.factory.send(raw_message)
+    @property
+    def _url(self):
+        return self.factory.url
+    @_url.setter
+    def _url(self, value):
+        self.factory.url = value
+    @property
+    def _original_url(self):
+        return self.factory._original_url
+    def connect(self, callback):
+        return self._client.connect(callback)
+    def authenticate(self, auth_params):
+        self.factory.authenticate(auth_params)
+    def close(self):
+        self._client.disconnect()
 
 
 if __name__ == '__main__':
