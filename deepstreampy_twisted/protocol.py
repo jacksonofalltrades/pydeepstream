@@ -71,7 +71,7 @@ class DeepstreamProtocol(Protocol):
         raw_auth_message = message_builder.get_message(
             constants.topic.AUTH,
             constants.actions.REQUEST,
-            [{}]
+            [authParams]
         )
         self.send(raw_auth_message)
     def _get_auth_data(self, data):
