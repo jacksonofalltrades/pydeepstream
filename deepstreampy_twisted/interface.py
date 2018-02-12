@@ -53,7 +53,7 @@ class DeepstreamClient(Client):
                 authParams['username'] = parse_result.username
                 authParams['password'] = parse_result.password
         if not conn_string or conn_string is None:
-            if parse_result.scheme == 'ws':
+            if parse_result.scheme in ['wss', 'ws']:
                 if parse_result.hostname:
                     conn_string = 'tcp:%s' % parse_result.hostname
                 if parse_result.port:
