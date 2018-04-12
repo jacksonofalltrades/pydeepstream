@@ -3,4 +3,4 @@ Twisted>=17.9.0
 autobahn>=17.10.1
 tornado>=4.5.2
 singledispatch>=3.4.0.3
--e git+https://github.com/sapid/deepstreampy.git@patch-1#egg=deepstreampy-0.1.1
+-e git+https://github.com/sapid/deepstreampy.git@dev#egg=deepstreampy-0.1.1
