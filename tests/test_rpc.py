@@ -4,7 +4,7 @@ from __future__ import unicode_literals
 from deepstreampy_twisted import DeepstreamClient, DeepstreamFactory
 from deepstreampy import rpc
 from deepstreampy import constants
-from tests.util import msg
+from tests.utils import msg
 from twisted.internet import task
 from twisted.test import proto_helpers
 
