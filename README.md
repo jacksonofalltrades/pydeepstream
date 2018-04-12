@@ -52,10 +52,10 @@ Then you may run the tests
 
 * [Twisted Matrix](https://twistedmatrix.com/trac/) - network engine
 * [Autobahn](https://github.com/crossbario/autobahn-python) - provides WebSocket protocol & factory for Twisted
-* [deepstreampy](https://github.com/YavorPaunov/deepstreampy) - provides an interface for deepstreampy's non-connection-related features
+* [deepstreampy](https://github.com/YavorPaunov/deepstreampy) - provides an interface for [deepstream](https://deepstream.io)'s non-connection-related features
 
 ## Authors
-* **Will Crawford** - Adaptation to Twisted; connection layer in Twisted + interface to  - [Sapid](https://github.com/sapid)
+* **Will Crawford** - Adaptation to Twisted; connection layer in Twisted + interface to [deepstreampy](https://github.com/YavorPaunov/deepstreampy) - [Sapid](https://github.com/sapid)
 
 ## License
 This project is licensed under MIT - see the [LICENSE](LICENSE) file for details.
