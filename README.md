@@ -17,6 +17,8 @@ pip install --process-dependency-links ./
 ### Usage
 In this example, we connect to a local Deepstream server, login anonymously, say hello to the 'chat' topic, subscribe to that topic, and then disconnect after 2 seconds.
 ```
+from deepstreampy_twisted.interface import DeepstreamClient
+
 def the_callback(message=None):
     print("Received event :" + str(message))
 from twisted.internet import reactor # Select your reactor
