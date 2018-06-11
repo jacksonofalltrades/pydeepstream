@@ -55,7 +55,10 @@ class DeepstreamClient(Client):
         if not conn_string or conn_string is None:
             if parse_result.scheme in ['wss', 'ws']:
                 if parse_result.hostname:
-                    conn_string = 'tcp:%s' % parse_result.hostname
+                    if parse_result.scheme == 'wss':
+                        conn_string = 'ssl:%s' % parse_result.hostname
+                    else:
+                        conn_string = 'tcp:%s' % parse_result.hostname
                 if parse_result.port:
                     conn_string += ':%s' % parse_result.port
                 else:
