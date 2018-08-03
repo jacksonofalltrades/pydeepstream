@@ -42,6 +42,8 @@ These events are distinct from the Deepstream.io Events feature; they are used o
 - [Records](https://github.com/YavorPaunov/deepstreampy/blob/dev/deepstreampy/record.py)
 - [Presence](https://github.com/YavorPaunov/deepstreampy/blob/dev/deepstreampy/presence.py)
  
+## Testing with Docker image for server
+`docker-compose up`
 
 
 ## Running the tests
